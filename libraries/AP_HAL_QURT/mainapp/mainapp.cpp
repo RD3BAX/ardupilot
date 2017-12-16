@@ -23,6 +23,8 @@ static uint64_t start_time;
 #define STORAGE_DIR "/var/APM"
 #define STORAGE_FILE STORAGE_DIR "/" SKETCHNAME ".stg"
 
+extern const char *get_ipv4_broadcast(void);
+
 // time since startup in microseconds
 static uint64_t micros64()
 {
@@ -65,7 +67,7 @@ static void get_storage(void)
     if (ardupilot_get_storage(buf, sizeof(buf)) != 0) {
         return;
     }
-    int fd = open(STORAGE_FILE ".new", O_WRONLY);
+    int fd = open(STORAGE_FILE ".new", O_WRONLY|O_CREAT|O_TRUNC, 0644);
     if (fd == -1) {
         printf("Unable to open %s - %s\n", STORAGE_FILE ".new", strerror(errno));
     }
@@ -82,6 +84,7 @@ static void get_storage(void)
  */
 static void socket_check(void)
 {
+    static const char *bcast = NULL;
     uint8_t buf[300];
     ssize_t ret = sock.recv(buf, sizeof(buf), 0);
     if (ret > 0) {
@@ -99,13 +102,41 @@ static void socket_check(void)
         }
     }
     uint32_t nbytes;
+    if (bcast == NULL) {
+        bcast = get_ipv4_broadcast();
+        if (bcast == NULL) {
+            bcast = "255.255.255.255";
+        }
+        printf("Broadcasting to %s\n", bcast);
+    }
     if (ardupilot_socket_check(buf, sizeof(buf), &nbytes) == 0) {
         if (!connected) {
-            sock.sendto(buf, nbytes, "255.255.255.255", 14550);
+            sock.sendto(buf, nbytes, bcast, 14550);
         } else {
             sock.send(buf, nbytes);
         }
     }
+}
+
+/*
+  encode argv/argv as a sequence separated by \n
+ */
+static char *encode_argv(int argc, const char *argv[])
+{
+    uint32_t len = 0;
+    for (int i=0; i<argc; i++) {
+        len += strlen(argv[i]) + 1;
+    }
+    char *ret = (char *)malloc(len+1);
+    char *p = ret;
+    for (int i=0; i<argc; i++) {
+        size_t slen = strlen(argv[i]);
+        strcpy(p, argv[i]);
+        p[slen] = '\n';
+        p += slen + 1;
+    }
+    *p = 0;
+    return ret;
 }
 
 /*
@@ -117,8 +148,10 @@ int main(int argc, const char *argv[])
 
     printf("Starting DSP code\n");
     send_storage();
-        
-    ardupilot_start();
+
+    char *cmdline = encode_argv(argc, argv);
+    ardupilot_start(cmdline, strlen(cmdline));
+    free(cmdline);
     while (true) {
         uint64_t now = micros64();
         if (now - last_get_storage_us > 1000*1000) {

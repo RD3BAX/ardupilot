@@ -19,11 +19,10 @@
  *  Author: Andrew Tridgell, January 2013
  *
  */
-
-#ifndef AP_SCHEDULER_H
-#define AP_SCHEDULER_H
+#pragma once
 
 #include <AP_Param/AP_Param.h>
+#include <AP_HAL/Util.h>
 
 #define AP_SCHEDULER_NAME_INITIALIZER(_name) .name = #_name,
 
@@ -74,7 +73,7 @@ public:
     // run the tasks. Call this once per 'tick'.
     // time_available is the amount of time available to run
     // tasks in microseconds
-    void run(uint16_t time_available);
+    void run(uint32_t time_available);
 
     // return the number of microseconds available for the current task
     uint16_t time_available_usec(void);
@@ -128,6 +127,7 @@ private:
 
     // number of ticks that _spare_micros is counted over
     uint8_t _spare_ticks;
-};
 
-#endif // AP_SCHEDULER_H
+    // performance counters
+    AP_HAL::Util::perf_counter_t *_perf_counters;
+};

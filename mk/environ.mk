@@ -4,8 +4,11 @@
 #
 SYSTYPE			:=	$(shell uname)
 
-GIT_VERSION := $(shell git rev-parse HEAD | cut -c1-8)
+GIT_VERSION ?= $(shell git rev-parse HEAD | cut -c1-8)
 EXTRAFLAGS += -DGIT_VERSION="\"$(GIT_VERSION)\""
+
+# Add missing parts from libc and libstdc++ for all boards
+EXTRAFLAGS += -I$(SKETCHBOOK)/libraries/AP_Common/missing
 
 # force LANG to C so awk works sanely on MacOS
 export LANG=C
@@ -96,8 +99,8 @@ ifneq ($(findstring vrubrain, $(MAKECMDGOALS)),)
 BUILDROOT		:=	$(SKETCHBOOK)/Build.$(SKETCH)
 endif
 
-ifneq ($(findstring vrhero, $(MAKECMDGOALS)),)
-# when building vrbrain we need all sources to be inside the sketchbook directory
+ifneq ($(findstring vrcore, $(MAKECMDGOALS)),)
+# when building vrcore we need all sources to be inside the sketchbook directory
 # as the NuttX build system relies on it
 BUILDROOT		:=	$(SKETCHBOOK)/Build.$(SKETCH)
 endif
@@ -115,6 +118,16 @@ ifneq ($(findstring CYGWIN, $(SYSTYPE)),)
   else
     BUILDROOT	:=	$(shell cygpath ${BUILDROOT})
   endif
+endif
+
+ifneq ($(findstring mavlink1, $(MAKECMDGOALS)),)
+EXTRAFLAGS += -DMAVLINK_PROTOCOL_VERSION=1
+MAVLINK_SUBDIR=v1.0
+MAVLINK_WIRE_PROTOCOL=1.0
+else
+EXTRAFLAGS += -DMAVLINK_PROTOCOL_VERSION=2
+MAVLINK_SUBDIR=v2.0
+MAVLINK_WIRE_PROTOCOL=2.0
 endif
 
 ifneq ($(APPDIR),)
@@ -193,13 +206,9 @@ HAL_BOARD = HAL_BOARD_VRBRAIN
 HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_NONE
 endif
 
-ifneq ($(findstring vrhero, $(MAKECMDGOALS)),)
+ifneq ($(findstring vrcore, $(MAKECMDGOALS)),)
 HAL_BOARD = HAL_BOARD_VRBRAIN
 HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_NONE
-endif
-
-ifneq ($(findstring flymaple, $(MAKECMDGOALS)),)
-HAL_BOARD = HAL_BOARD_FLYMAPLE
 endif
 
 ifneq ($(findstring bhat, $(MAKECMDGOALS)),)
@@ -217,8 +226,18 @@ HAL_BOARD = HAL_BOARD_QURT
 HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_NONE
 endif
 
+ifneq ($(findstring pxfmini, $(MAKECMDGOALS)),)
+HAL_BOARD = HAL_BOARD_LINUX
+HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_LINUX_PXFMINI
+endif
+
 # default to SITL
 ifeq ($(HAL_BOARD),)
 HAL_BOARD = HAL_BOARD_SITL
 HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_NONE
+endif
+
+ifneq ($(findstring navio2, $(MAKECMDGOALS)),)
+HAL_BOARD = HAL_BOARD_LINUX
+HAL_BOARD_SUBTYPE = HAL_BOARD_SUBTYPE_LINUX_NAVIO2
 endif

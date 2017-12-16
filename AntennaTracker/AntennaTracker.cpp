@@ -3,7 +3,7 @@
 /*
    Lead developers: Matthew Ridley and Andrew Tridgell
  
-   Please contribute your ideas! See http://dev.ardupilot.com for details
+   Please contribute your ideas! See http://dev.ardupilot.org for details
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@
  */
 
 #include "Tracker.h"
+#include "version.h"
 
 #define SCHED_TASK(func, _interval_ticks, _max_time_micros) SCHED_TASK_CLASS(Tracker, &tracker, func, _interval_ticks, _max_time_micros)
 
@@ -47,6 +48,7 @@ const AP_Scheduler::Task Tracker::scheduler_tasks[] = {
     SCHED_TASK(gcs_retry_deferred,     50,   1000),
     SCHED_TASK(one_second_loop,         1,   3900),
     SCHED_TASK(compass_cal_update,     50,    100),
+    SCHED_TASK(accel_cal_update,       10,    100)
 };
 
 /**
@@ -118,7 +120,6 @@ void Tracker::ten_hz_logging_loop()
 {
     if (should_log(MASK_LOG_IMU)) {
         DataFlash.Log_Write_IMU(ins);
-        DataFlash.Log_Write_IMUDT(ins);
     }
     if (should_log(MASK_LOG_ATTITUDE)) {
         Log_Write_Attitude();
@@ -134,6 +135,7 @@ void Tracker::ten_hz_logging_loop()
 const AP_HAL::HAL& hal = AP_HAL::get_HAL();
 
 Tracker::Tracker(void)
+    : DataFlash{FIRMWARE_STRING}
 {
     memset(&current_loc, 0, sizeof(current_loc));
     memset(&vehicle, 0, sizeof(vehicle));

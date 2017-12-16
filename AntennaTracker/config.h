@@ -1,5 +1,7 @@
 // -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 //
+#pragma once
+
 #include "defines.h"
 
 #include "APM_Config.h" // <== THIS INCLUDE, DO NOT EDIT IT. EVER.
@@ -40,8 +42,11 @@
 #ifndef YAW_RANGE_DEFAULT
  # define YAW_RANGE_DEFAULT 360
 #endif
-#ifndef PITCH_RANGE_DEFAULT
- # define PITCH_RANGE_DEFAULT 180
+#ifndef PITCH_MIN_DEFAULT
+ # define PITCH_MIN_DEFAULT -90
+#endif
+#ifndef PITCH_MAX_DEFAULT
+ # define PITCH_MAX_DEFAULT 90
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -73,14 +78,4 @@
     MASK_LOG_IMU | \
     MASK_LOG_RCOUT | \
     MASK_LOG_COMPASS
-#endif
-
-/*
-  build a firmware version string.
-  GIT_VERSION comes from Makefile builds
-*/
-#ifndef GIT_VERSION
-#define FIRMWARE_STRING THISFIRMWARE
-#else
-#define FIRMWARE_STRING THISFIRMWARE " (" GIT_VERSION ")"
 #endif

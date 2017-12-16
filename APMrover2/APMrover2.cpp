@@ -28,7 +28,7 @@
 
    APMrover alpha version tester: Franco Borasio, Daniel Chapelat...
 
-   Please contribute your ideas! See http://dev.ardupilot.com for details
+   Please contribute your ideas! See http://dev.ardupilot.org for details
 */
 
 #include "Rover.h"
@@ -68,15 +68,15 @@ const AP_Scheduler::Task Rover::scheduler_tasks[] = {
     SCHED_TASK(update_events,          50,   1000),
     SCHED_TASK(check_usb_mux,           3,   1000),
     SCHED_TASK(mount_update,           50,    600),
+    SCHED_TASK(update_trigger,         50,    600),
     SCHED_TASK(gcs_failsafe_check,     10,    600),
     SCHED_TASK(compass_accumulate,     50,    900),
     SCHED_TASK(update_notify,          50,    300),
     SCHED_TASK(one_second_loop,         1,   3000),
     SCHED_TASK(compass_cal_update,     50,    100), 
-#if FRSKY_TELEM_ENABLED == ENABLED
-    SCHED_TASK(frsky_telemetry_send,    5,    100),
-#endif
+    SCHED_TASK(accel_cal_update,       10,    100),
     SCHED_TASK(dataflash_periodic,     50,    300),
+    SCHED_TASK(button_update,          5,     100),
 };
 
 /*
@@ -157,7 +157,7 @@ void Rover::ahrs_update()
     // if using the EKF get a speed update now (from accelerometers)
     Vector3f velocity;
     if (ahrs.get_velocity_NED(velocity)) {
-        ground_speed = pythagorous2(velocity.x, velocity.y);
+        ground_speed = norm(velocity.x, velocity.y);
     }
 
     if (should_log(MASK_LOG_ATTITUDE_FAST))
@@ -165,7 +165,6 @@ void Rover::ahrs_update()
 
     if (should_log(MASK_LOG_IMU)) {
         DataFlash.Log_Write_IMU(ins);
-        DataFlash.Log_Write_IMUDT(ins);
     }
 }
 
@@ -177,8 +176,21 @@ void Rover::mount_update(void)
 #if MOUNT == ENABLED
     camera_mount.update();
 #endif
+}
+
+/*
+  update camera trigger - 50Hz
+ */
+void Rover::update_trigger(void)
+{
 #if CAMERA == ENABLED
     camera.trigger_pic_cleanup();
+    if (camera.check_trigger_pin()) {
+        gcs_send_message(MSG_CAMERA_FEEDBACK);
+        if (should_log(MASK_LOG_CAMERA)) {
+            DataFlash.Log_Write_Camera(ahrs, gps, current_loc);
+        }
+    } 
 #endif
 }
 
@@ -255,6 +267,10 @@ void Rover::update_logging2(void)
 
     if (should_log(MASK_LOG_RC))
         Log_Write_RC();
+
+    if (should_log(MASK_LOG_IMU)) {
+        DataFlash.Log_Write_Vibration(ins);
+    }
 }
 
 
@@ -332,7 +348,7 @@ void Rover::update_GPS_50Hz(void)
         if (gps.last_message_time_ms(i) != last_gps_reading[i]) {
             last_gps_reading[i] = gps.last_message_time_ms(i);
             if (should_log(MASK_LOG_GPS)) {
-                DataFlash.Log_Write_GPS(gps, i, current_loc.alt);
+                DataFlash.Log_Write_GPS(gps, i);
             }
         }
     }
@@ -359,7 +375,12 @@ void Rover::update_GPS_10Hz(void)
                 init_home();
 
                 // set system clock for log timestamps
-                hal.util->set_system_clock(gps.time_epoch_usec());
+                uint64_t gps_timestamp = gps.time_epoch_usec();
+                
+                hal.util->set_system_clock(gps_timestamp);
+                
+                // update signing timestamp
+                GCS_MAVLINK::update_signing_timestamp(gps_timestamp);
 
                 if (g.compass_enabled) {
                     // Set compass declination automatically
@@ -368,12 +389,8 @@ void Rover::update_GPS_10Hz(void)
                 ground_start_count = 0;
             }
         }
-        Vector3f velocity;
-        if (ahrs.get_velocity_NED(velocity)) {
-            ground_speed = pythagorous2(velocity.x, velocity.y);
-        } else {
-            ground_speed   = gps.ground_speed();
-        }
+        // get ground speed estimate from AHRS
+        ground_speed = ahrs.groundspeed();
 
 #if CAMERA == ENABLED
         if (camera.update_location(current_loc, rover.ahrs) == true) {
@@ -392,18 +409,19 @@ void Rover::update_current_mode(void)
     switch (control_mode){
     case AUTO:
     case RTL:
-        set_reverse(false);
         calc_lateral_acceleration();
         calc_nav_steer();
         calc_throttle(g.speed_cruise);
         break;
 
     case GUIDED:
-        set_reverse(false);
         if (rtl_complete || verify_RTL()) {
             // we have reached destination so stop where we are
-            channel_throttle->servo_out = g.throttle_min.get();
-            channel_steer->servo_out = 0;
+            if (channel_throttle->get_servo_out() != g.throttle_min.get()) {
+                gcs_send_mission_item_reached_message(0);
+            }
+            channel_throttle->set_servo_out(g.throttle_min.get());
+            channel_steer->set_servo_out(0);
             lateral_acceleration = 0;
         } else {
             calc_lateral_acceleration();
@@ -449,19 +467,18 @@ void Rover::update_current_mode(void)
           we set the exact value in set_servos(), but it helps for
           logging
          */
-        channel_throttle->servo_out = channel_throttle->control_in;
-        channel_steer->servo_out = channel_steer->pwm_to_angle();
+        channel_throttle->set_servo_out(channel_throttle->get_control_in());
+        channel_steer->set_servo_out(channel_steer->pwm_to_angle());
 
         // mark us as in_reverse when using a negative throttle to
         // stop AHRS getting off
-        set_reverse(channel_throttle->servo_out < 0);
+        set_reverse(channel_throttle->get_servo_out() < 0);
         break;
 
     case HOLD:
         // hold position - stop motors and center steering
-        channel_throttle->servo_out = 0;
-        channel_steer->servo_out = 0;
-        set_reverse(false);
+        channel_throttle->set_servo_out(0);
+        channel_steer->set_servo_out(0);
         break;
 
     case INITIALISING:
@@ -488,7 +505,7 @@ void Rover::update_navigation()
         calc_lateral_acceleration();
         calc_nav_steer();
         if (verify_RTL()) {
-            channel_throttle->servo_out = g.throttle_min.get();
+            channel_throttle->set_servo_out(g.throttle_min.get());
             set_mode(HOLD);
         }
         break;
@@ -499,12 +516,12 @@ void Rover::update_navigation()
         calc_nav_steer();
         if (rtl_complete || verify_RTL()) {
             // we have reached destination so stop where we are
-            channel_throttle->servo_out = g.throttle_min.get();
-            channel_steer->servo_out = 0;
+            channel_throttle->set_servo_out(g.throttle_min.get());
+            channel_steer->set_servo_out(0);
             lateral_acceleration = 0;
         }
         break;
     }
 }
-
+ 
 AP_HAL_MAIN_CALLBACKS(&rover);

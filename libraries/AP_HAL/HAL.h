@@ -1,6 +1,4 @@
-
-#ifndef __AP_HAL_HAL_H__
-#define __AP_HAL_HAL_H__
+#pragma once
 
 #include "AP_HAL_Namespace.h"
 
@@ -8,7 +6,7 @@
 #include "GPIO.h"
 #include "RCInput.h"
 #include "RCOutput.h"
-#include "SPIDriver.h"
+#include "SPIDevice.h"
 #include "Storage.h"
 #include "UARTDriver.h"
 #include "system.h"
@@ -21,9 +19,8 @@ public:
         AP_HAL::UARTDriver* _uartC, // telem1
         AP_HAL::UARTDriver* _uartD, // telem2
         AP_HAL::UARTDriver* _uartE, // 2nd GPS
-        AP_HAL::I2CDriver*  _i2c0,
-        AP_HAL::I2CDriver*  _i2c1,
-        AP_HAL::I2CDriver*  _i2c2,
+        AP_HAL::UARTDriver* _uartF, // extra1
+        AP_HAL::I2CDeviceManager* _i2c_mgr,
         AP_HAL::SPIDeviceManager* _spi,
         AP_HAL::AnalogIn*   _analogin,
         AP_HAL::Storage*    _storage,
@@ -40,9 +37,8 @@ public:
         uartC(_uartC),
         uartD(_uartD),
         uartE(_uartE),
-        i2c(_i2c0),
-        i2c1(_i2c1),
-        i2c2(_i2c2),
+        uartF(_uartF),
+        i2c_mgr(_i2c_mgr),
         spi(_spi),
         analogin(_analogin),
         storage(_storage),
@@ -80,9 +76,8 @@ public:
     AP_HAL::UARTDriver* uartC;
     AP_HAL::UARTDriver* uartD;
     AP_HAL::UARTDriver* uartE;
-    AP_HAL::I2CDriver*  i2c;
-    AP_HAL::I2CDriver*  i2c1;
-    AP_HAL::I2CDriver*  i2c2;
+    AP_HAL::UARTDriver* uartF;
+    AP_HAL::I2CDeviceManager* i2c_mgr;
     AP_HAL::SPIDeviceManager* spi;
     AP_HAL::AnalogIn*   analogin;
     AP_HAL::Storage*    storage;
@@ -94,6 +89,3 @@ public:
     AP_HAL::Util        *util;
     AP_HAL::OpticalFlow *opticalflow;
 };
-
-#endif // __AP_HAL_HAL_H__
-

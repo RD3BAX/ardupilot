@@ -17,7 +17,6 @@
 #include <dspal_types.h>
 
 #include "UARTDriver.h"
-//#include "AnalogIn.h"
 #include "Storage.h"
 #include "RCOutput.h"
 #include <AP_Scheduler/AP_Scheduler.h>
@@ -178,9 +177,6 @@ void Scheduler::_run_timers(bool called_from_timer_thread)
         _failsafe();
     }
 
-    // process analog input
-    // ((QURTAnalogIn *)hal.analogin)->_timer_tick();
-
     _in_timer_proc = false;
 }
 
@@ -245,7 +241,8 @@ void *Scheduler::_uart_thread(void *arg)
         //((UARTDriver *)hal.uartA)->timer_tick();
         ((UARTDriver *)hal.uartB)->timer_tick();
         ((UARTDriver *)hal.uartC)->timer_tick();
-        //((UARTDriver *)hal.uartD)->timer_tick();
+        ((UARTDriver *)hal.uartD)->timer_tick();
+        ((UARTDriver *)hal.uartE)->timer_tick();
     }
     return NULL;
 }
@@ -269,10 +266,6 @@ void *Scheduler::_io_thread(void *arg)
 bool Scheduler::in_timerprocess() 
 {
     return getpid() != _main_task_pid;
-}
-
-bool Scheduler::system_initializing() {
-    return !_initialized;
 }
 
 void Scheduler::system_initialized() {
